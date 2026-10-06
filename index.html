@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>番号割当</title>
+  
+    <!-- 💡 自動アイコン設定ファイルと連動 -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2a9d8f">
+    <link rel="apple-touch-icon" href="sports_court192_2.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="番号割当">
+  
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            text-align: center;
+            background-color: #f0f4f8;
+            margin: 0;
+            padding: 20px;
+            user-select: none;
+        }
+        h1 {
+            color: #334e68;
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+        }
+        .setup-area {
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            margin-bottom: 15px;
+        }
+        .btn-container {
+            margin-bottom: 10px;
+        }
+        input[type="number"] {
+            width: 80px;
+            padding: 10px;
+            font-size: 1.2rem;
+            border: 2px solid #bcccdc;
+            border-radius: 8px;
+            text-align: center;
+            margin-right: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 1rem;
+            background-color: #627d98;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:active {
+            background-color: #486581;
+        }
+        .reset-btn {
+            background-color: #e53e3e;
+            margin-bottom: 10px;
+            padding: 8px 16px;
+            font-size: 0.9rem;
+        }
+        .reset-btn:active {
+            background-color: #c53030;
+        }
+        input:disabled, button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        #announce-area {
+            background: #e4e7eb;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 15px;
+            min-height: 5.5rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .guide-text {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #486581;
+        }
+        .result-text {
+            margin-top: 5px;
+            font-size: 2.5rem; 
+            font-weight: bold;
+            color: #d9480f;
+            min-height: 3rem;
+            line-height: 1;
+        }
+        .grid-container {
+            display: grid;
+            gap: 6px;
+            justify-content: center;
+            margin: 0 auto;
+            width: 100%;
+            max-width: 95vw;
+            box-sizing: border-box;
+            margin-bottom: 25px;
+        }
+        .cell {
+            aspect-ratio: 1 / 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            font-weight: bold;
+            background: white;
+            border: 1.5px solid #9fb3c8;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            transition: all 0.1s ease;
+            box-sizing: border-box;
+        }
+        .cell.active:active {
+            transform: scale(0.92);
+        }
+        .cell.disabled {
+            background: #e4e7eb;
+            border-color: #cbd2d9;
+            cursor: not-allowed;
+        }
+        .cell.revealed {
+            background: #e3fafc;
+            border-color: #15aabf;
+            color: #0b7285;
+        }
+        .cell.current-selected {
+            background: #fff3bf !important;
+            border-color: #f59f00 !important;
+            color: #d9480f !important;
+            box-shadow: 0 0 10px rgba(245, 159, 0, 0.6);
+            animation: pulse 0.5s ease-in-out alternate infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.05); }
+        }
+        #effect-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(255, 255, 255, 0.9);
+            justify-content: center;
+            align-items: center;
+            font-size: 6rem;
+            z-index: 1000;
+            animation: popEffect 0.5s ease-out forwards;
+        }
+        @keyframes popEffect {
+            0% { transform: scale(0.5); opacity: 0; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <h1>🎯 番号割当</h1>
+
+    <div class="setup-area">
+        <div class="btn-container">
+            <button class="reset-btn" onclick="resetApp()">🔄 やり直す</button>
+        </div>
+        <div>
+            <input type="number" id="member-count" min="1" placeholder="人数">
+            <button id="ok-btn" onclick="initApp()">準備OK</button>
+        </div>
+    </div>
+
+    <div id="announce-area">
+        <div class="guide-text">🔵をタップして番号を引いてね！</div>
+        <div class="result-text" id="result-display"></div>
+    </div>
+
+    <div class="grid-container" id="grid"></div>
+
+    <div id="effect-overlay"></div>
+
+    <script>
+        let numbersPool = [];
+        let lastSelectedCell = null;
+
+        function initApp() {
+            const countInput = document.getElementById('member-count');
+            const okBtn = document.getElementById('ok-btn');
+            const totalMembers = parseInt(countInput.value, 10);
+
+            if (isNaN(totalMembers) || totalMembers <= 0) {
+                alert('有効な人数を入力してください');
+                return;
+            }
+
+            countInput.disabled = true;
+            okBtn.disabled = true;
+            
+            lastSelectedCell = null;
+            document.getElementById('result-display').innerText = '';
+
+            numbersPool = [];
+            for (let i = 1; i <= totalMembers; i++) {
+                numbersPool.push(i);
+            }
+            for (let i = numbersPool.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [numbersPool[i], numbersPool[j]] = [numbersPool[j], numbersPool[i]];
+            }
+
+            let cols = 6;
+            if (totalMembers <= 25) {
+                cols = Math.ceil(Math.sqrt(totalMembers));
+            } else {
+                cols = 6;
+            }
+
+            const rows = Math.ceil(totalMembers / cols);
+            const totalCells = cols * rows;
+
+            const grid = document.getElementById('grid');
+            grid.innerHTML = '';
+            grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+            
+            const cellWidth = (90 / cols) + 'vw';
+            
+            for (let i = 0; i < totalCells; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.style.width = cellWidth;
+                
+                if (i < totalMembers) {
+                    cell.classList.add('active');
+                    cell.innerText = '🔵';
+                    cell.onclick = () => revealNumber(cell);
+                } else {
+                    cell.classList.add('disabled');
+                    cell.innerText = '❌️';
+                }
+                grid.appendChild(cell);
+            }
+        }
+
+        function revealNumber(cell) {
+            if (cell.classList.contains('revealed') || numbersPool.length === 0) return;
+
+            const nextNumber = numbersPool.pop();
+
+            // 全画面ポップアップ部分：おみくじを消して巨大なオレンジの数字だけを中央に表示
+            const overlay = document.getElementById('effect-overlay');
+            overlay.innerHTML = `
+                <div style="display: flex; justify-content: center; align-items: center; width: 100%; height: 100%;">
+                    <div style="font-size: 11rem; font-weight: bold; color: #d9480f;">${nextNumber}</div>
+                </div>
+            `;
+            overlay.style.display = 'flex';
+
+            setTimeout(() => {
+                overlay.style.display = 'none';
+                
+                if (lastSelectedCell) {
+                    lastSelectedCell.classList.remove('current-selected');
+                    lastSelectedCell.classList.add('revealed');
+                }
+                
+                cell.innerText = nextNumber;
+                cell.classList.add('revealed', 'current-selected');
+                cell.onclick = null;
+                
+                lastSelectedCell = cell;
+                
+                document.getElementById('result-display').innerText = nextNumber;
+                
+            }, 1000);
+        }
+
+        function resetApp() {
+            document.getElementById('member-count').disabled = false;
+            document.getElementById('ok-btn').disabled = false;
+            document.getElementById('result-display').innerText = '';
+            document.getElementById('grid').innerHTML = '';
+            numbersPool = [];
+            lastSelectedCell = null;
+        }
+
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js')
+            .then(() => console.log('Service Worker Registered'));
+        }
+      
+      if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js')
+        .then(() => console.log('Service Worker Registered'));
+      }
+      
+    </script>
+</body>
+</html>
